@@ -1,5 +1,9 @@
 # LUMEN DRIFT — hold the light
 
+[![make.fun · best-game-01](https://make.fun/badge/best-game-01.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
+[![rank](https://make.fun/badge/best-game-01/ChristaNavisa/best-game-01/rank.svg)](https://make.fun/bounty/best-game-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
+[![reward](https://make.fun/badge/best-game-01/ChristaNavisa/best-game-01/reward.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
+
 A top-down arena shooter about an orb of light outlasting the dark. Built
 from scratch for make.fun's best-game-01: plain HTML, CSS and ES modules,
 no build step, no network, no libraries. All art is drawn in code and all
