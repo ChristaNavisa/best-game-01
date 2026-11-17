@@ -2,7 +2,7 @@
 // pickups, ember shards and the particles and floating score text that answer every hit.
 // Factories live here; the world owns the lists and the rules that move them.
 
-import { ENEMY, FIELD, PICKUP, PLAYER } from './config.js';
+import { ENEMY, FIELD, PICKUP, PLAYER, bloodMoonFor } from './config.js';
 
 export const KIND_WISP = 'wisp';
 export const KIND_SPITTER = 'spitter';
@@ -55,6 +55,10 @@ export function createPlayer() {
     bulletCount: 1,
     dashCooldownMax: PLAYER.dashCooldown,
     maxHp: PLAYER.maxHp,
+    /** How many extra shadows one bullet can pass through (Piercing Rounds). */
+    pierce: 0,
+    /** Second Wind: spent when it saves the run this wave, re-armed each wave. */
+    secondWindUsed: false,
     upgrades: {},
     /** Relics the Warden has paid out this run, and the ember-value multiplier they give. */
     relics: {},
@@ -68,6 +72,8 @@ export function createEnemy(kind, x, y, wave) {
   // and the Warden's own bulk grows with the night it arrives in.
   const nightScale = 1 + Math.floor((wave - 1) / 5) * 0.5;
   const hpScale = kind === KIND_BRUTE ? nightScale * (1 + Math.floor(wave / 3)) : nightScale;
+  // A blood-moon wave runs a quarter faster: the shadows hunt, not drift.
+  const moonSpeed = bloodMoonFor(wave) ? 1.25 : 1;
   return {
     kind,
     x,
@@ -77,7 +83,7 @@ export function createEnemy(kind, x, y, wave) {
     radius: def.radius,
     hp: def.hp * hpScale,
     maxHp: def.hp * hpScale,
-    speed: def.speed + Math.min(40, wave * 3),
+    speed: (def.speed + Math.min(40, wave * 3)) * moonSpeed,
     touch: def.touch,
     shotTimer: def.shotInterval ? def.shotInterval * 0.6 : 0,
     flash: 0,
@@ -88,23 +94,30 @@ export function createEnemy(kind, x, y, wave) {
     lungeTime: 0,
     lungeX: 0,
     lungeY: 0,
-    // Warden attack state: a ring of bolts on one timer, fresh wisps on another.
+    // Warden attack state: a ring of bolts on one timer, fresh wisps on another,
+    // an aimed fan on a third — and the rage it falls into below half health.
     burstTimer: def.burstInterval ? def.burstInterval : 0,
     summonTimer: def.summonInterval ? def.summonInterval : 0,
+    fanTimer: def.fanInterval ? def.fanInterval : 0,
+    enraged: false,
   };
 }
 
-export function createBullet(x, y, angle, friendly, damage = 1) {
-  const speed = friendly ? PLAYER.bulletSpeed : ENEMY.spitter.bulletSpeed;
+export function createBullet(x, y, angle, friendly, damage = 1, speed = null) {
+  const base = friendly ? PLAYER.bulletSpeed : ENEMY.spitter.bulletSpeed;
+  const v = speed ?? base;
   return {
     x,
     y,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
+    vx: Math.cos(angle) * v,
+    vy: Math.sin(angle) * v,
     radius: friendly ? PLAYER.bulletRadius : 7,
     friendly,
     damage,
     dead: false,
+    /** Shadows this bullet has already struck, so a piercing round cannot hit
+        the same shadow twice as it passes through. */
+    hits: [],
   };
 }
 

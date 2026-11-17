@@ -65,6 +65,26 @@ export const RELICS = [
       player.shardBonus *= 1.5;
     },
   },
+  {
+    id: 'thornwick',
+    name: 'THORN WICK',
+    glyph: '✷',
+    color: '#ff9d5c',
+    blurb: 'Shadows that touch you take 3 damage.',
+    apply() {
+      // No immediate change: the touch rule bites the attacker while this is held.
+    },
+  },
+  {
+    id: 'secondwind',
+    name: 'SECOND WIND',
+    glyph: '↻',
+    color: '#7dff9e',
+    blurb: 'Once per wave, a killing blow leaves you at 1 heart.',
+    apply() {
+      // No immediate change: the hurt rule spends it, the wave start re-arms it.
+    },
+  },
 ];
 
 /** One relic the run does not hold yet, rolled from the world's seeded random. */

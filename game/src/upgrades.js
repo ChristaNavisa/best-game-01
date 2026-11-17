@@ -90,6 +90,16 @@ export const UPGRADES = [
       player.bulletCount += 1;
     },
   },
+  {
+    id: 'pierce',
+    name: 'PIERCING ROUNDS',
+    glyph: '➶',
+    color: '#aef7ff',
+    blurb: 'Bullets pass through +1 shadow each.',
+    apply(player) {
+      player.pierce += 1;
+    },
+  },
 ];
 
 /** Three distinct upgrades, rolled from the pool. */

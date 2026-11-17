@@ -3,7 +3,7 @@
 // colour. Everything is drawn in code — glowing orbs, jagged shadows, particles — so the
 // game ships no image assets at all.
 
-import { FIELD, PALETTE, PLAYER, isBossWave, nightFor } from './config.js';
+import { FIELD, PALETTE, PLAYER, bloodMoonFor, isBossWave, nightFor } from './config.js';
 import { KIND_BRUTE, KIND_DASHER, KIND_MINI, KIND_SPITTER, KIND_SPLITTER, KIND_WARDEN, KIND_WISP, PICKUP_HEART, PICKUP_MAGNET, PICKUP_SHIELD, PICKUP_SPREAD } from './entities.js';
 import { createRandom } from './random.js';
 import { UPGRADE_PANEL, upgradeCardRect } from './upgrades.js';
@@ -163,7 +163,7 @@ export function createRenderer(canvas) {
       : enemy.kind === KIND_SPLITTER ? PALETTE.splitter
       : enemy.kind === KIND_MINI ? PALETTE.mini
       : enemy.kind === KIND_DASHER ? PALETTE.dasher
-      : enemy.kind === KIND_WARDEN ? PALETTE.warden
+      : enemy.kind === KIND_WARDEN ? (enemy.enraged ? '#ff5d73' : PALETTE.warden)
       : PALETTE.brute;
     ctx.shadowColor = color;
     ctx.shadowBlur = 16;
@@ -215,7 +215,7 @@ export function createRenderer(canvas) {
       ctx.stroke();
       ctx.fillStyle = '#fff3c4';
       ctx.beginPath();
-      ctx.arc(0, 0, enemy.radius * 0.3 * (1 + 0.12 * Math.sin(time * 6)), 0, Math.PI * 2);
+      ctx.arc(0, 0, enemy.radius * 0.3 * (1 + 0.12 * Math.sin(time * (enemy.enraged ? 14 : 6))), 0, Math.PI * 2);
       ctx.fill();
     } else if (enemy.kind === KIND_BRUTE) {
       ctx.beginPath();
@@ -354,11 +354,13 @@ export function createRenderer(canvas) {
       ctx.font = '700 20px "Trebuchet MS", sans-serif';
       ctx.fillText(`COMBO ×${state.combo}`, FIELD.width / 2, 66);
     }
-    // Wave and night, top right.
+    // Wave and night, top right — a blood-moon wave reads red.
     ctx.textAlign = 'right';
     ctx.font = FONT_HUD;
-    ctx.fillStyle = PALETTE.text;
-    ctx.fillText(`WAVE ${Math.max(1, state.wave)}  •  NIGHT ${nightFor(Math.max(1, state.wave))}`, FIELD.width - 24, 40);
+    const wave = Math.max(1, state.wave);
+    const moon = bloodMoonFor(wave);
+    ctx.fillStyle = moon ? PALETTE.danger : PALETTE.text;
+    ctx.fillText(`WAVE ${wave}  •  NIGHT ${nightFor(wave)}${moon ? '  •  BLOOD MOON' : ''}`, FIELD.width - 24, 40);
     ctx.font = FONT_SMALL;
     ctx.fillStyle = PALETTE.dim;
     ctx.fillText(`BEST ${Math.max(best, state.score)}`, FIELD.width - 24, 64);
@@ -367,8 +369,8 @@ export function createRenderer(canvas) {
     if (warden) {
       ctx.textAlign = 'center';
       ctx.font = '700 20px "Trebuchet MS", sans-serif';
-      ctx.fillStyle = PALETTE.warden;
-      ctx.fillText('⚠  LANTERN WARDEN  ⚠', FIELD.width / 2, 92);
+      ctx.fillStyle = warden.enraged ? PALETTE.danger : PALETTE.warden;
+      ctx.fillText(warden.enraged ? '⚠  LANTERN WARDEN — ENRAGED  ⚠' : '⚠  LANTERN WARDEN  ⚠', FIELD.width / 2, 92);
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillRect(FIELD.width / 2 - 190, 100, 380, 10);
       ctx.fillStyle = PALETTE.danger;
@@ -448,6 +450,10 @@ export function createRenderer(canvas) {
           ctx.font = FONT_BODY;
           ctx.fillStyle = PALETTE.text;
           ctx.fillText(`NIGHT ${nightFor(state.wave)} — the dark deepens`, FIELD.width / 2, 168);
+          if (bloodMoonFor(state.wave)) {
+            ctx.fillStyle = PALETTE.danger;
+            ctx.fillText('BLOOD MOON — shadows quicken, embers worth double', FIELD.width / 2, 200);
+          }
         }
       }
       ctx.globalAlpha = 1;
@@ -478,7 +484,9 @@ export function createRenderer(canvas) {
     ctx.fillText('Every 5th wave the Lantern Warden comes — slay it, claim a relic.', FIELD.width / 2, 470);
     ctx.fillStyle = PALETTE.dim;
     ctx.font = FONT_BODY;
-    ctx.fillText('Past wave 10 the drift never ends — nights deepen, shadows harden.', FIELD.width / 2, 530);
+    ctx.fillText('Past wave 10 the drift never ends — nights deepen, shadows harden;', FIELD.width / 2, 530);
+    ctx.fillStyle = PALETTE.danger;
+    ctx.fillText('every third night is a blood moon: faster shadows, embers worth double.', FIELD.width / 2, 560);
     if (best > 0) {
       ctx.fillStyle = PALETTE.banner;
       ctx.font = FONT_PANEL;
@@ -486,7 +494,7 @@ export function createRenderer(canvas) {
     }
     ctx.fillStyle = PALETTE.player;
     ctx.font = '700 26px "Trebuchet MS", sans-serif';
-    ctx.fillText(Math.sin(state.time * 4) > -0.2 ? '— click or press Space to begin —' : '', FIELD.width / 2, 580);
+    ctx.fillText(Math.sin(state.time * 4) > -0.2 ? '— click or press Space to begin —' : '', FIELD.width / 2, 606);
   }
 
   function drawPaused() {

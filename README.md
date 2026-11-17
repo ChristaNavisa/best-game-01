@@ -36,19 +36,22 @@ quicker dash, a wider ember vacuum or more speed, stacking wave after wave.
 - **Dasher** — drifts in, flashes a warning, then lunges at you in a burst.
 - **Brute** — slow, tough, worth the most.
 - **Lantern Warden** — a boss that arrives every 5th wave: a huge lantern that
-  lumbers after you, throws rings of bolts and summons fresh wisps. Slay it and
-  it pays out a **relic** — a permanent keepsake (an extra heart, a lantern
-  core, a prism lens, a swift wick, an aegis flame or a greed wick) that
-  changes the run for good. When every relic is held, the Warden pays 500
-  points instead.
+  lumbers after you, throws rings of bolts and summons fresh wisps. Below half
+  health it **rages** — faster rings and summons, a quicker step, and an aimed
+  fan of slow bolts between the rings. Slay it and it pays out a **relic** — a
+  permanent keepsake (an extra heart, a lantern core, a prism lens, a swift
+  wick, an aegis flame, a greed wick, a thorn wick that bites back, or a
+  second wind that saves the run once per wave) that changes the run for
+  good. When every relic is held, the Warden pays 500 points instead.
 
 Dropped pickups: **heart** (restore 1 HP, up to 5), **spread shot**
 (three-way fire for 10 s), **shield** (absorbs one hit), **magnet**
 (pulls embers to you for 8 s). You have 3 HP; a hit costs one and grants
 1.2 s of invulnerability. Survive as long as you can. Waves come in nights
 of five — each new night the shadows harden and the wave-clear bonus grows,
-and past wave 10 the drift never ends. The best score is kept in
-`localStorage`.
+and every third night is a **blood moon**: the shadows run a quarter faster
+and their embers are worth double. Past wave 10 the drift never ends. The
+best score is kept in `localStorage`.
 
 ## Screenshots
 

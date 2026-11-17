@@ -36,8 +36,10 @@ export const ENEMY = {
   /** Drifts in slowly, flashes a warning, then lunges at the orb in a burst. */
   dasher: { radius: 14, hp: 2, speed: 74, score: 3, shards: 2, touch: 1, lungeInterval: 2.4, lungeSpeed: 430, lungeTime: 0.35 },
   /** The Lantern Warden: a boss that arrives every fifth wave. Slow, huge, and it
-      answers with rings of bolts and fresh wisps while it lumbers after the orb. */
-  warden: { radius: 46, hp: 150, speed: 34, score: 25, shards: 10, touch: 1, burstInterval: 2.8, burstCount: 10, summonInterval: 7 },
+      answers with rings of bolts and fresh wisps while it lumbers after the orb.
+      Below half health it rages: faster rings, faster summons, a quicker step,
+      and an aimed fan of bolts at the orb between the rings. */
+  warden: { radius: 46, hp: 240, speed: 34, score: 25, shards: 10, touch: 1, burstInterval: 2.8, burstCount: 10, summonInterval: 7, fanInterval: 4.2, fanCount: 5, enrageBurstInterval: 1.7, enrageSummonInterval: 4.5, enrageSpeed: 58 },
 };
 
 /** Wave n (1-based) buys enemies with this many points; costs are ENEMY.*.score. */
@@ -53,6 +55,12 @@ export function nightFor(wave) {
 /** Every fifth wave the Lantern Warden arrives instead of a normal wave. */
 export function isBossWave(wave) {
   return wave % 5 === 0;
+}
+
+/** Every third night is a blood moon: the shadows run a quarter faster and their
+    embers are worth double. Night 3 is waves 11–15, night 6 is waves 26–30. */
+export function bloodMoonFor(wave) {
+  return nightFor(wave) % 3 === 0;
 }
 
 export const PICKUP = {

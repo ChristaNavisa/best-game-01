@@ -14,7 +14,7 @@ const PLAY_SECONDS = 26;
 const END_LIMIT_SECONDS = 600;
 const UPGRADE_LIMIT_SECONDS = 600;
 const BOSS_LIMIT_SECONDS = 300;
-const BOSS_FIGHT_SECONDS = 12;
+const BOSS_FIGHT_SECONDS = 24;
 
 /** In a staged scene the pilot takes the first card, so the run keeps going. */
 function autoUpgrade(world) {
@@ -85,6 +85,32 @@ export function autopilot(state, skill) {
     const d = Math.hypot(640 - player.x, 360 - player.y);
     if (d > 4) move = { x: (640 - player.x) / d, y: (360 - player.y) / d };
   }
+  if (skill === 'full') {
+    // A decent player dodges: sidestep a bolt closing in, and dash clear of
+    // one that is already on top of the orb.
+    let threat = null;
+    let threatD = 150;
+    for (const b of state.enemyBullets) {
+      const d = Math.hypot(b.x - player.x, b.y - player.y);
+      if (d < threatD) {
+        threatD = d;
+        threat = b;
+      }
+    }
+    if (threat) {
+      const bl = Math.hypot(threat.vx, threat.vy) || 1;
+      let px = -threat.vy / bl;
+      let py = threat.vx / bl;
+      const dx = threat.x - player.x;
+      const dy = threat.y - player.y;
+      if (px * dx + py * dy > 0) {
+        px = -px;
+        py = -py;
+      }
+      move = { x: px, y: py };
+      if (threatD < 80) dash = true;
+    }
+  }
   return { move, aim, firing, dash };
 }
 
@@ -104,14 +130,15 @@ export function stageShot(name, world) {
       if (world.state.over) break;
       const warden = world.state.enemies.find((e) => e.kind === KIND_WARDEN);
       if (warden) {
-        // A few seconds into the fight, until the boss is bloodied: the frame then
-        // shows a living boss, a half-spent health bar and the ring of bolts.
+        // A few seconds into the fight, until the boss is bloodied and raging:
+        // the frame then shows a living boss, a half-spent health bar, the ring
+        // of bolts — and the red ENRAGED label of its second phase.
         for (let j = 0; j < BOSS_FIGHT_SECONDS / STEP; j += 1) {
           world.step(STEP, autopilot(world.state, 'full'), false);
           if (world.state.over) break;
           const boss = world.state.enemies.find((e) => e.kind === KIND_WARDEN);
           if (!boss) break;
-          if (boss.hp < boss.maxHp * 0.6) break;
+          if (boss.hp < boss.maxHp * 0.45) break;
         }
         break;
       }

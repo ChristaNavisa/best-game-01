@@ -2,7 +2,7 @@
 // pickups and the combo multiplier. One fixed step advances everything; the step
 // returns an event bitmask so the main loop can answer each event with sound or text.
 
-import { COMBO, ENEMY, FIELD, PICKUP, PLAYER, SHARD_VALUE, STEP, isBossWave, nightFor, waveBudget } from './config.js';
+import { COMBO, ENEMY, FIELD, PICKUP, PLAYER, SHARD_VALUE, STEP, bloodMoonFor, isBossWave, nightFor, waveBudget } from './config.js';
 import {
   KIND_BRUTE,
   KIND_DASHER,
@@ -123,6 +123,8 @@ export function createWorld(random) {
     state.waveStartedAt = state.time;
     // Aegis Flame re-arms its shield at the start of every wave.
     if (state.player.relics.aegisflame) state.player.shield = true;
+    // Second Wind is spent at most once a wave; each wave re-arms it.
+    state.player.secondWindUsed = false;
     return EVENT_WAVE;
   }
 
@@ -177,6 +179,20 @@ export function createWorld(random) {
       return EVENT_HIT;
     }
     player.hp -= 1;
+    // Second Wind: once per wave, the blow that would end the run leaves the
+    // orb at one heart instead, with a long mercy window to get clear.
+    if (player.hp <= 0 && player.relics.secondwind && !player.secondWindUsed) {
+      player.hp = 1;
+      player.secondWindUsed = true;
+      player.invulnerable = 2;
+      state.combo = 1;
+      state.comboTimer = 0;
+      state.shake = 0.5;
+      state.flash = 0.25;
+      burst(state, player.x, player.y, '#7dff9e', 26, random, 300);
+      state.floaters.push(createFloater(player.x, player.y - 24, 'SECOND WIND', '#7dff9e'));
+      return EVENT_HIT;
+    }
     player.invulnerable = PLAYER.invulnerable;
     state.combo = 1;
     state.comboTimer = 0;
@@ -257,19 +273,42 @@ export function createWorld(random) {
       enemy.wobble += dt * 3;
       if (enemy.kind === KIND_WARDEN) {
         // Lumbers after the orb; rings of bolts and fresh wisps on their own timers.
-        seek(enemy, player.x, player.y, enemy.speed, dt);
+        // Below half health it rages: quicker step, faster rings and summons, and
+        // an aimed fan of bolts at the orb between the rings.
+        if (!enemy.enraged && enemy.hp < enemy.maxHp / 2) {
+          enemy.enraged = true;
+          enemy.burstTimer = ENEMY.warden.enrageBurstInterval;
+          enemy.summonTimer = ENEMY.warden.enrageSummonInterval;
+          enemy.fanTimer = 1;
+          burst(state, enemy.x, enemy.y, '#ff5d73', 30, random, 320);
+          state.floaters.push(createFloater(enemy.x, enemy.y - 60, 'THE WARDEN RAGES', '#ff5d73'));
+        }
+        const chase = enemy.enraged ? ENEMY.warden.enrageSpeed : enemy.speed;
+        seek(enemy, player.x, player.y, chase, dt);
         enemy.burstTimer -= dt;
         if (enemy.burstTimer <= 0) {
-          enemy.burstTimer = ENEMY.warden.burstInterval;
+          enemy.burstTimer = enemy.enraged ? ENEMY.warden.enrageBurstInterval : ENEMY.warden.burstInterval;
           const offset = random.angle();
           for (let i = 0; i < ENEMY.warden.burstCount; i += 1) {
             const a = offset + (i / ENEMY.warden.burstCount) * Math.PI * 2;
             state.enemyBullets.push(createBullet(enemy.x, enemy.y, a, false));
           }
         }
+        enemy.fanTimer -= dt;
+        if (enemy.fanTimer <= 0) {
+          enemy.fanTimer = ENEMY.warden.fanInterval;
+          const base = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+          const fan = ENEMY.warden.fanCount;
+          // The fan's bolts fly slower than the ring's: a strafing orb can
+          // slip between them, a standing one cannot.
+          for (let i = 0; i < fan; i += 1) {
+            const off = (i - (fan - 1) / 2) * 0.18;
+            state.enemyBullets.push(createBullet(enemy.x, enemy.y, base + off, false, 1, 190));
+          }
+        }
         enemy.summonTimer -= dt;
         if (enemy.summonTimer <= 0) {
-          enemy.summonTimer = ENEMY.warden.summonInterval;
+          enemy.summonTimer = enemy.enraged ? ENEMY.warden.enrageSummonInterval : ENEMY.warden.summonInterval;
           const adds = state.enemies.filter((e) => e.kind === KIND_WISP).length;
           if (adds < 6) {
             for (let i = 0; i < 2; i += 1) {
@@ -345,8 +384,11 @@ export function createWorld(random) {
       for (let i = state.enemies.length - 1; i >= 0; i -= 1) {
         const enemy = state.enemies[i];
         const d = Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y);
-        if (d < enemy.radius + bullet.radius) {
-          bullet.dead = true;
+        if (d < enemy.radius + bullet.radius && !bullet.hits.includes(enemy)) {
+          bullet.hits.push(enemy);
+          // A piercing round keeps flying until it has struck more shadows
+          // than the run's pierce count allows; a plain round dies on the first.
+          if (bullet.hits.length > state.player.pierce) bullet.dead = true;
           enemy.hp -= bullet.damage;
           enemy.flash = 0.12;
           state.shotsHit += 1;
@@ -355,7 +397,7 @@ export function createWorld(random) {
             killEnemy(enemy, i);
             events |= EVENT_KILL;
           }
-          break;
+          if (bullet.dead) break;
         }
       }
     }
@@ -381,7 +423,8 @@ export function createWorld(random) {
   function updateTouch(dt) {
     let events = 0;
     const player = state.player;
-    for (const enemy of state.enemies) {
+    for (let i = state.enemies.length - 1; i >= 0; i -= 1) {
+      const enemy = state.enemies[i];
       const d = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (d < player.radius + enemy.radius - 2) {
         events |= hurtPlayer(enemy.x, enemy.y);
@@ -391,6 +434,15 @@ export function createWorld(random) {
         const len = Math.hypot(dx, dy) || 1;
         enemy.x += (dx / len) * 30;
         enemy.y += (dy / len) * 30;
+        // Thorn Wick: a shadow that touches the orb is bitten back for 3 damage.
+        if (player.relics.thornwick && !enemy.dead) {
+          enemy.hp -= 3;
+          enemy.flash = 0.12;
+          if (enemy.hp <= 0) {
+            killEnemy(enemy, i);
+            events |= EVENT_KILL;
+          }
+        }
         if (events & EVENT_OVER) break;
       }
     }
@@ -417,7 +469,9 @@ export function createWorld(random) {
       if (d < player.radius + shard.radius + 6) {
         shard.dead = true;
         state.shardsCollected += 1;
-        const gained = Math.round(SHARD_VALUE * state.combo * player.shardBonus);
+        // A blood-moon wave doubles every ember's worth.
+        const moon = bloodMoonFor(state.wave) ? 2 : 1;
+        const gained = Math.round(SHARD_VALUE * state.combo * player.shardBonus * moon);
         state.score += gained;
         state.floaters.push(createFloater(shard.x, shard.y - 10, `+${gained}`, '#ffc44d'));
         events |= EVENT_SHARD;
