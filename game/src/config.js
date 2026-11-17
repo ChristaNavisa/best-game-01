@@ -33,6 +33,8 @@ export const ENEMY = {
   splitter: { radius: 19, hp: 2, speed: 78, score: 2, shards: 2, touch: 1 },
   mini: { radius: 10, hp: 1, speed: 165, score: 1, shards: 1, touch: 1 },
   brute: { radius: 30, hp: 9, speed: 46, score: 5, shards: 5, touch: 1 },
+  /** Drifts in slowly, flashes a warning, then lunges at the orb in a burst. */
+  dasher: { radius: 14, hp: 2, speed: 74, score: 3, shards: 2, touch: 1, lungeInterval: 2.4, lungeSpeed: 430, lungeTime: 0.35 },
 };
 
 /** Wave n (1-based) buys enemies with this many points; costs are ENEMY.*.score. */
@@ -70,6 +72,7 @@ export const PALETTE = {
   splitter: '#9d7bff',
   mini: '#b39dff',
   brute: '#5a2ea6',
+  dasher: '#ff9d5c',
   shard: '#ffc44d',
   heart: '#ff5d73',
   spread: '#7dff9e',

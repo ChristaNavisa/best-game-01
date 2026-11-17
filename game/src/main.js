@@ -6,10 +6,11 @@
 // instead of running the loop, paints it twice and sets window.__shotReady for a screenshot.
 import { BEST_KEY, STEP } from './config.js';
 import { createRandom } from './random.js';
-import { createWorld, EVENT_CLEAR, EVENT_HIT, EVENT_KILL, EVENT_OVER, EVENT_PICKUP, EVENT_SHARD, EVENT_WAVE } from './world.js';
+import { createWorld, EVENT_CLEAR, EVENT_DASH, EVENT_HIT, EVENT_KILL, EVENT_OVER, EVENT_PICKUP, EVENT_SHARD, EVENT_WAVE } from './world.js';
 import { ACTION_CONFIRM, ACTION_MUTE, ACTION_PAUSE, ACTION_RESTART, createInput } from './input.js';
 import { createAudio } from './audio.js';
-import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE, SCREEN_UPGRADE } from './render.js';
+import { upgradeCardRect } from './upgrades.js';
 import { autopilot, stageShot } from './shots.js';
 
 /** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped, not replayed. */
@@ -74,6 +75,7 @@ function runGame() {
     if (events & EVENT_SHARD) audio.shard();
     if (events & EVENT_PICKUP) audio.pickup();
     if (events & EVENT_HIT) audio.playerHit();
+    if (events & EVENT_DASH) audio.dash();
     if (events & EVENT_OVER) audio.gameOver();
   }
 
@@ -95,6 +97,16 @@ function runGame() {
     announce(`Game over. Score ${world.state.score}. Best ${best}. Wave ${world.state.wave}.`);
   }
 
+  function pickUpgrade(index) {
+    const offer = world.state.upgradeOffer;
+    if (!offer[index]) return;
+    const def = world.applyUpgrade(offer[index].id);
+    if (!def) return;
+    audio.upgrade();
+    screen = SCREEN_PLAY;
+    announce(`Picked ${def.name}. Wave ${world.state.wave + 1} incoming.`);
+  }
+
   function handleActions() {
     const actions = input.takeActions();
     if (actions & ACTION_MUTE) {
@@ -102,6 +114,24 @@ function runGame() {
       announce(muted ? 'Muted.' : 'Sound on.');
     }
     if (actions & ACTION_CONFIRM) audio.unlock();
+    if (screen === SCREEN_UPGRADE) {
+      const digit = input.takeDigit();
+      if (digit >= 0) pickUpgrade(digit);
+      else {
+        const click = input.takeClick();
+        if (click) {
+          for (let i = 0; i < 3; i += 1) {
+            const rect = upgradeCardRect(i);
+            if (click.x >= rect.x && click.x <= rect.x + rect.width
+              && click.y >= rect.y && click.y <= rect.y + rect.height) {
+              pickUpgrade(i);
+              break;
+            }
+          }
+        }
+      }
+      return;
+    }
     if (screen === SCREEN_TITLE && (actions & ACTION_CONFIRM)) startGame();
     else if (screen === SCREEN_OVER && (actions & (ACTION_CONFIRM | ACTION_RESTART))) startGame();
     else if (screen === SCREEN_PLAY && (actions & ACTION_PAUSE)) {
@@ -132,6 +162,10 @@ function runGame() {
     if (events & EVENT_OVER) endGame();
     else if (events & EVENT_HIT) {
       announce(world.state.player.hp === 1 ? 'Hit. 1 heart left.' : `Hit. ${world.state.player.hp} hearts left.`);
+    }
+    if (world.state.awaitingUpgrade) {
+      screen = SCREEN_UPGRADE;
+      announce(`Wave ${world.state.wave} clear. Choose an upgrade: press 1, 2 or 3, or click a card.`);
     }
   }
 

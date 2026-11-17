@@ -9,6 +9,7 @@ export const KIND_SPITTER = 'spitter';
 export const KIND_SPLITTER = 'splitter';
 export const KIND_MINI = 'mini';
 export const KIND_BRUTE = 'brute';
+export const KIND_DASHER = 'dasher';
 
 export const PICKUP_HEART = 'heart';
 export const PICKUP_SPREAD = 'spread';
@@ -44,6 +45,16 @@ export function createPlayer() {
     magnetTimer: 0,
     shield: false,
     moving: false,
+    // Run stats the between-wave upgrades change: fire rate, bullet damage,
+    // move speed, ember vacuum, bullets per volley, dash cooldown and max hearts.
+    fireInterval: PLAYER.fireInterval,
+    damage: 1,
+    speed: PLAYER.speed,
+    vacuum: PLAYER.vacuum,
+    bulletCount: 1,
+    dashCooldownMax: PLAYER.dashCooldown,
+    maxHp: PLAYER.maxHp,
+    upgrades: {},
   };
 }
 
@@ -65,10 +76,15 @@ export function createEnemy(kind, x, y, wave) {
     flash: 0,
     wobble: Math.random() * Math.PI * 2,
     dead: false,
+    // Dasher lunge state: counts down to the next burst, then the burst itself.
+    lungeTimer: def.lungeInterval ? def.lungeInterval * 0.8 : 0,
+    lungeTime: 0,
+    lungeX: 0,
+    lungeY: 0,
   };
 }
 
-export function createBullet(x, y, angle, friendly) {
+export function createBullet(x, y, angle, friendly, damage = 1) {
   const speed = friendly ? PLAYER.bulletSpeed : ENEMY.spitter.bulletSpeed;
   return {
     x,
@@ -77,6 +93,7 @@ export function createBullet(x, y, angle, friendly) {
     vy: Math.sin(angle) * speed,
     radius: friendly ? PLAYER.bulletRadius : 7,
     friendly,
+    damage,
     dead: false,
   };
 }

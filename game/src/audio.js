@@ -100,6 +100,12 @@ export function createAudio() {
       setTimeout(() => tone(659, 0.1, 'sine', 0.18), 90);
       setTimeout(() => tone(784, 0.16, 'sine', 0.18), 180);
     },
+    upgrade() {
+      tone(523, 0.1, 'sine', 0.2);
+      setTimeout(() => tone(659, 0.1, 'sine', 0.2), 80);
+      setTimeout(() => tone(784, 0.1, 'sine', 0.2), 160);
+      setTimeout(() => tone(1047, 0.18, 'sine', 0.2), 240);
+    },
     gameOver() {
       tone(392, 0.22, 'triangle', 0.22, 370);
       setTimeout(() => tone(311, 0.22, 'triangle', 0.22, 294), 200);

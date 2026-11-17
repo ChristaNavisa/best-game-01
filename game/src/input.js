@@ -35,11 +35,21 @@ export function createInput(canvas, field) {
   let firing = false;
   let aim = { x: field.width / 2, y: field.height / 2 - 120 };
   let dashQueued = false;
+  let digitQueued = -1;
+  let clickQueued = null;
+
+  const DIGIT_KEYS = {
+    Digit1: 0, Numpad1: 0,
+    Digit2: 1, Numpad2: 1,
+    Digit3: 2, Numpad3: 2,
+  };
 
   function onKeyDown(event) {
     if (event.repeat) return;
     const code = event.code;
-    if (code === 'Space' || code === 'Enter') {
+    if (DIGIT_KEYS[code] !== undefined) {
+      digitQueued = DIGIT_KEYS[code];
+    } else if (code === 'Space' || code === 'Enter') {
       actions |= ACTION_CONFIRM;
       event.preventDefault();
     } else if (code === 'KeyP' || code === 'Escape') {
@@ -68,6 +78,7 @@ export function createInput(canvas, field) {
     if (event.button === 0) {
       firing = true;
       actions |= ACTION_CONFIRM;
+      clickQueued = toField(event.clientX, event.clientY, canvas.getBoundingClientRect(), field);
     } else if (event.button === 2) {
       dashQueued = true;
     }
@@ -121,6 +132,18 @@ export function createInput(canvas, field) {
       const d = dashQueued;
       dashQueued = false;
       return d;
+    },
+    /** Upgrade card picked with 1/2/3 since the last call, or -1. */
+    takeDigit() {
+      const d = digitQueued;
+      digitQueued = -1;
+      return d;
+    },
+    /** Where the mouse was clicked since the last call, in field coordinates, or null. */
+    takeClick() {
+      const c = clickQueued;
+      clickQueued = null;
+      return c;
     },
     /** One-shot actions since the last call, as a bitmask. */
     takeActions() {

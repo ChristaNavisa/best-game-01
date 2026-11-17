@@ -25,11 +25,15 @@ static server, e.g. `node serve.ts`).
 Shadow wisps drift in from the edges in waves. Blast them and gather the
 embers they drop — each ember is worth 10 points times your combo, and
 kills chained within 3 seconds raise the combo up to ×8. Clearing a wave
-pays a bonus of 50 × the wave number, then the next wave comes in thicker.
+pays a bonus of 50 × the wave number, then offers three upgrade cards —
+pick one (keys 1/2/3 or click) and the next wave comes in thicker. Your
+build is yours: rapid fire, heavy rounds, split shot, an extra heart, a
+quicker dash, a wider ember vacuum or more speed, stacking wave after wave.
 
 - **Wisp** — drifts toward you.
 - **Spitter** — keeps its distance and fires bolts.
 - **Splitter** — breaks into two minis when destroyed.
+- **Dasher** — drifts in, flashes a warning, then lunges at you in a burst.
 - **Brute** — slow, tough, worth the most.
 
 Dropped pickups: **heart** (restore 1 HP, up to 5), **spread shot**
@@ -40,12 +44,13 @@ kept in `localStorage`.
 
 ## Screenshots
 
-The three screenshots in `screenshots/` are real renders of the game in
+The four screenshots in `screenshots/` are real renders of the game in
 Chromium, taken deterministically with `?seed=1`:
 
 1. `1-start.jpg` — title screen (`?shot=start&seed=1`)
 2. `2-play.jpg` — wave 3 in progress (`?shot=play&seed=1`)
-3. `3-end.jpg` — game over after a 63-second run (`?shot=end&seed=1`)
+3. `3-end.jpg` — game over screen, score 5390 at wave 6 (`?shot=end&seed=1`)
+4. `4-upgrade.jpg` — the upgrade choice after clearing wave 1 (`?shot=upgrade&seed=1`)
 
 `?shot=` runs the game headlessly with a built-in autopilot and sets
 `window.__shotReady` when the frame is ready, so the same seed always
@@ -64,6 +69,7 @@ game/
     input.js      keyboard + mouse state
     audio.js      synthesized WebAudio effects
     entities.js   factories for player, enemies, bullets, pickups, shards
+    upgrades.js   the between-wave upgrade pool, card layout and applying a pick
     world.js      the rules: waves, spawning, kills, combo, scoring, pickups
     render.js     all drawing: background, enemies, player, HUD, screens
     shots.js      autopilot + deterministic screenshot scenes

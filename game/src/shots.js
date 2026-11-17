@@ -6,11 +6,17 @@
 // drifts at half speed — so it is caught out once the waves thicken, as a hurried player is.
 
 import { STEP } from './config.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE, SCREEN_UPGRADE } from './render.js';
 
 const START_SECONDS = 5;
 const PLAY_SECONDS = 26;
 const END_LIMIT_SECONDS = 600;
+const UPGRADE_LIMIT_SECONDS = 600;
+
+/** In a staged scene the pilot takes the first card, so the run keeps going. */
+function autoUpgrade(world) {
+  if (world.state.awaitingUpgrade) world.applyUpgrade(world.state.upgradeOffer[0].id);
+}
 
 /** Nearest living thing of a list to a point, or null. */
 function nearest(list, x, y) {
@@ -80,23 +86,34 @@ export function autopilot(state, skill) {
 }
 
 /**
- * Set `world` to the named scene (start, play or end; any other name is start) and return
- * the screen to draw over it and the best score to show.
+ * Set `world` to the named scene (start, play, end or upgrade; any other name is
+ * start) and return the screen to draw over it and the best score to show.
  */
 export function stageShot(name, world) {
   world.reset();
-  if (name !== 'play' && name !== 'end') {
+  if (name !== 'play' && name !== 'end' && name !== 'upgrade') {
     world.begin();
     for (let index = 0; index < START_SECONDS / STEP; index += 1) {
       world.step(STEP, autopilot(world.state, 'demo'), true);
     }
     return { screen: SCREEN_TITLE, best: 0 };
   }
+  if (name === 'upgrade') {
+    // Play forward until the first wave clears and the three cards come up.
+    world.begin();
+    for (let index = 0; index < UPGRADE_LIMIT_SECONDS / STEP; index += 1) {
+      world.step(STEP, autopilot(world.state, 'full'), false);
+      if (world.state.awaitingUpgrade) break;
+      if (world.state.over) break;
+    }
+    return { screen: world.state.awaitingUpgrade ? SCREEN_UPGRADE : SCREEN_PLAY, best: world.state.score };
+  }
   world.begin();
   const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
   const skill = name === 'end' ? 'weak' : 'full';
   for (let index = 0; index < limit / STEP; index += 1) {
     world.step(STEP, autopilot(world.state, skill), false);
+    autoUpgrade(world);
     if (world.state.over) break;
   }
   const over = world.state.over;

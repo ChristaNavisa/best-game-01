@@ -4,13 +4,15 @@
 // game ships no image assets at all.
 
 import { FIELD, PALETTE, PLAYER } from './config.js';
-import { KIND_BRUTE, KIND_MINI, KIND_SPITTER, KIND_SPLITTER, KIND_WISP, PICKUP_HEART, PICKUP_MAGNET, PICKUP_SHIELD, PICKUP_SPREAD } from './entities.js';
+import { KIND_BRUTE, KIND_DASHER, KIND_MINI, KIND_SPITTER, KIND_SPLITTER, KIND_WISP, PICKUP_HEART, PICKUP_MAGNET, PICKUP_SHIELD, PICKUP_SPREAD } from './entities.js';
 import { createRandom } from './random.js';
+import { UPGRADE_PANEL, upgradeCardRect } from './upgrades.js';
 
 export const SCREEN_TITLE = 'title';
 export const SCREEN_PLAY = 'play';
 export const SCREEN_PAUSED = 'paused';
 export const SCREEN_OVER = 'over';
+export const SCREEN_UPGRADE = 'upgrade';
 
 const FONT_TITLE = '700 84px "Trebuchet MS", "Segoe UI", sans-serif';
 const FONT_BANNER = '700 46px "Trebuchet MS", "Segoe UI", sans-serif';
@@ -159,6 +161,7 @@ export function createRenderer(canvas) {
       : enemy.kind === KIND_SPITTER ? PALETTE.spitter
       : enemy.kind === KIND_SPLITTER ? PALETTE.splitter
       : enemy.kind === KIND_MINI ? PALETTE.mini
+      : enemy.kind === KIND_DASHER ? PALETTE.dasher
       : PALETTE.brute;
     ctx.shadowColor = color;
     ctx.shadowBlur = 16;
@@ -168,6 +171,16 @@ export function createRenderer(canvas) {
       ctx.rotate(Math.PI / 4 + wobble);
       ctx.fillRect(-enemy.radius * 0.72, -enemy.radius * 0.72, enemy.radius * 1.44, enemy.radius * 1.44);
       ctx.rotate(-Math.PI / 4 - wobble);
+    } else if (enemy.kind === KIND_DASHER) {
+      ctx.rotate(wobble);
+      ctx.beginPath();
+      ctx.moveTo(0, -enemy.radius);
+      ctx.lineTo(enemy.radius * 0.82, 0);
+      ctx.lineTo(0, enemy.radius);
+      ctx.lineTo(-enemy.radius * 0.82, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.rotate(-wobble);
     } else if (enemy.kind === KIND_SPLITTER) {
       ctx.beginPath();
       for (let i = 0; i < 6; i += 1) {
@@ -302,7 +315,7 @@ export function createRenderer(canvas) {
     const player = state.player;
     ctx.textBaseline = 'alphabetic';
     // Hearts, top left.
-    for (let i = 0; i < PLAYER.maxHp + 2; i += 1) {
+    for (let i = 0; i < player.maxHp + 2; i += 1) {
       drawHeart(ctx, 30 + i * 30, 30, 10, i < player.hp);
     }
     // Score, top centre.
@@ -328,7 +341,7 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'left';
     ctx.font = FONT_SMALL;
     ctx.fillStyle = dashReady ? PALETTE.player : PALETTE.dim;
-    const dashFrac = dashReady ? 1 : 1 - player.dashCooldown / PLAYER.dashCooldown;
+    const dashFrac = dashReady ? 1 : 1 - player.dashCooldown / player.dashCooldownMax;
     ctx.fillRect(24, FIELD.height - 34, 120 * dashFrac, 6);
     ctx.strokeStyle = PALETTE.dim;
     ctx.lineWidth = 1;
@@ -350,6 +363,14 @@ export function createRenderer(canvas) {
       ctx.font = FONT_SMALL;
       ctx.fillStyle = PALETTE.dim;
       ctx.fillText('MUTED [M]', FIELD.width - 24, FIELD.height - 22);
+    }
+    // The run's build so far, bottom right: what the player chose between waves.
+    const build = Object.entries(player.upgrades).map(([id, count]) => `${id.toUpperCase()}${count > 1 ? ` ×${count}` : ''}`);
+    if (build.length > 0) {
+      ctx.textAlign = 'right';
+      ctx.font = FONT_SMALL;
+      ctx.fillStyle = PALETTE.dim;
+      ctx.fillText(build.join('   •   '), FIELD.width - 24, FIELD.height - 46);
     }
     // Wave banners.
     if (state.betweenWaves > 0) {
@@ -390,6 +411,8 @@ export function createRenderer(canvas) {
     ctx.fillStyle = PALETTE.text;
     ctx.fillText('Blast the shadows. Gather their embers. Chain kills to raise your combo.', FIELD.width / 2, 410);
     ctx.fillText('Grab hearts, spread shot, shields and magnets. Survive the waves.', FIELD.width / 2, 440);
+    ctx.fillStyle = PALETTE.banner;
+    ctx.fillText('Clear a wave to choose an upgrade — build your orb, your way.', FIELD.width / 2, 470);
     if (best > 0) {
       ctx.fillStyle = PALETTE.banner;
       ctx.font = FONT_PANEL;
@@ -410,6 +433,39 @@ export function createRenderer(canvas) {
     ctx.font = FONT_BODY;
     ctx.fillStyle = PALETTE.dim;
     ctx.fillText('P or click to resume', FIELD.width / 2, FIELD.height / 2 + 34);
+  }
+
+  function drawUpgrade(state) {
+    ctx.fillStyle = 'rgba(5, 8, 18, 0.6)';
+    ctx.fillRect(0, 0, FIELD.width, FIELD.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = PALETTE.banner;
+    ctx.font = FONT_BANNER;
+    ctx.fillText(`WAVE ${state.wave} CLEAR`, FIELD.width / 2, 150);
+    ctx.fillStyle = PALETTE.text;
+    ctx.font = '400 24px "Trebuchet MS", sans-serif';
+    ctx.fillText('Choose one upgrade — press 1, 2 or 3, or click a card.', FIELD.width / 2, 196);
+    state.upgradeOffer.forEach((def, index) => {
+      const rect = upgradeCardRect(index);
+      panel(ctx, rect.x, rect.y, rect.width, rect.height);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = def.color;
+      ctx.font = '700 44px "Trebuchet MS", sans-serif';
+      ctx.fillText(def.glyph, rect.x + rect.width / 2, rect.y + 62);
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = '700 22px "Trebuchet MS", sans-serif';
+      ctx.fillText(def.name, rect.x + rect.width / 2, rect.y + 104);
+      ctx.fillStyle = PALETTE.dim;
+      ctx.font = '400 17px "Trebuchet MS", sans-serif';
+      ctx.fillText(def.blurb, rect.x + rect.width / 2, rect.y + 136);
+      const taken = state.player.upgrades[def.id] || 0;
+      ctx.fillStyle = taken > 0 ? PALETTE.banner : PALETTE.dim;
+      ctx.font = '700 17px "Trebuchet MS", sans-serif';
+      ctx.fillText(taken > 0 ? `OWNED ×${taken}  —  [${index + 1}]` : `[${index + 1}]`, rect.x + rect.width / 2, rect.y + 168);
+    });
+    ctx.fillStyle = PALETTE.dim;
+    ctx.font = FONT_SMALL;
+    ctx.fillText('The next wave starts when you choose.', FIELD.width / 2, UPGRADE_PANEL.y + UPGRADE_PANEL.cardHeight + 44);
   }
 
   function drawOver(state, best) {
@@ -459,9 +515,22 @@ export function createRenderer(canvas) {
         ctx.fillStyle = `rgba(255, 60, 80, ${state.flash * 0.5})`;
         ctx.fillRect(0, 0, FIELD.width, FIELD.height);
       }
-      if (screen === SCREEN_PLAY || screen === SCREEN_PAUSED) drawHud(state, best, muted);
+      // Last heart: the edges bleed red, pulsing, until the player recovers.
+      if (!state.over && state.player.hp === 1) {
+        const pulse = 0.1 + 0.08 * Math.sin(state.time * 5);
+        const vignette = ctx.createRadialGradient(
+          FIELD.width / 2, FIELD.height / 2, FIELD.height * 0.42,
+          FIELD.width / 2, FIELD.height / 2, FIELD.height * 0.85,
+        );
+        vignette.addColorStop(0, 'rgba(255, 40, 70, 0)');
+        vignette.addColorStop(1, `rgba(255, 40, 70, ${pulse})`);
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, FIELD.width, FIELD.height);
+      }
+      if (screen === SCREEN_PLAY || screen === SCREEN_PAUSED || screen === SCREEN_UPGRADE) drawHud(state, best, muted);
       if (screen === SCREEN_TITLE) drawTitle(state, best);
       else if (screen === SCREEN_PAUSED) drawPaused();
+      else if (screen === SCREEN_UPGRADE) drawUpgrade(state);
       else if (screen === SCREEN_OVER) drawOver(state, best);
     },
   };

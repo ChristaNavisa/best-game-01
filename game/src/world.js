@@ -5,6 +5,7 @@
 import { COMBO, ENEMY, FIELD, PICKUP, PLAYER, SHARD_VALUE, STEP, waveBudget } from './config.js';
 import {
   KIND_BRUTE,
+  KIND_DASHER,
   KIND_MINI,
   KIND_SPITTER,
   KIND_SPLITTER,
@@ -24,6 +25,7 @@ import {
   edgePoint,
   seek,
 } from './entities.js';
+import { applyUpgradeTo, rollUpgrades } from './upgrades.js';
 
 export const EVENT_HIT = 1;
 export const EVENT_OVER = 2;
@@ -34,14 +36,23 @@ export const EVENT_KILL = 32;
 export const EVENT_SHARD = 64;
 export const EVENT_DASH = 128;
 
-const WAVE_COST = { [KIND_WISP]: 1, [KIND_SPITTER]: 3, [KIND_SPLITTER]: 3, [KIND_BRUTE]: 6 };
+const WAVE_COST = { [KIND_WISP]: 1, [KIND_SPITTER]: 3, [KIND_SPLITTER]: 3, [KIND_BRUTE]: 6, [KIND_DASHER]: 3 };
 
-/** What wave n may contain: brutes from wave 3, spitters from wave 2. */
+/** What wave n may contain: brutes from wave 3, spitters and dashers from wave 2. */
 function waveKinds(wave) {
   const kinds = [KIND_WISP, KIND_WISP, KIND_WISP, KIND_SPLITTER];
-  if (wave >= 2) kinds.push(KIND_SPITTER, KIND_SPITTER);
+  if (wave >= 2) kinds.push(KIND_SPITTER, KIND_SPITTER, KIND_DASHER);
   if (wave >= 3) kinds.push(KIND_BRUTE);
+  if (wave >= 4) kinds.push(KIND_DASHER);
   return kinds;
+}
+
+/** Spread of a volley with this many bullets, in radians off the aim. */
+function volleyAngles(count) {
+  if (count <= 1) return [0];
+  if (count === 2) return [-0.09, 0.09];
+  if (count === 3) return [-0.16, 0, 0.16];
+  return [-0.24, -0.08, 0.08, 0.24];
 }
 
 function buildQueue(random, wave) {
@@ -92,6 +103,9 @@ export function createWorld(random) {
     flash: 0,
     time: 0,
     over: false,
+    /** The three upgrade cards on offer after a wave clear, until one is picked. */
+    upgradeOffer: [],
+    awaitingUpgrade: false,
   };
 
   function startWave() {
@@ -178,7 +192,7 @@ export function createWorld(random) {
       player.dashX = dx;
       player.dashY = dy;
       player.dashTimer = PLAYER.dashTime;
-      player.dashCooldown = PLAYER.dashCooldown;
+      player.dashCooldown = player.dashCooldownMax;
       player.invulnerable = Math.max(player.invulnerable, PLAYER.dashTime + 0.05);
       burst(state, player.x, player.y, '#7df3ff', 8, random, 160);
       return EVENT_DASH;
@@ -189,14 +203,15 @@ export function createWorld(random) {
       player.x += player.dashX * PLAYER.dashSpeed * dt;
       player.y += player.dashY * PLAYER.dashSpeed * dt;
     } else {
-      player.x += input.move.x * PLAYER.speed * dt;
-      player.y += input.move.y * PLAYER.speed * dt;
+      player.x += input.move.x * player.speed * dt;
+      player.y += input.move.y * player.speed * dt;
     }
     clampToField(player, PLAYER.radius + 4);
 
     if (input.firing && player.fireTimer <= 0) {
-      player.fireTimer = PLAYER.fireInterval;
-      const angles = player.spreadTimer > 0 ? [-0.16, 0, 0.16] : [0];
+      player.fireTimer = player.fireInterval;
+      const count = Math.max(player.bulletCount, player.spreadTimer > 0 ? 3 : 1);
+      const angles = volleyAngles(count);
       for (const off of angles) {
         const a = player.angle + off;
         state.bullets.push(
@@ -205,6 +220,7 @@ export function createWorld(random) {
             player.y + Math.sin(a) * (PLAYER.radius + 8),
             a,
             true,
+            player.damage,
           ),
         );
       }
@@ -227,6 +243,25 @@ export function createWorld(random) {
           enemy.shotTimer = ENEMY.spitter.shotInterval;
           const a = Math.atan2(player.y - enemy.y, player.x - enemy.x);
           state.enemyBullets.push(createBullet(enemy.x, enemy.y, a, false));
+        }
+      } else if (enemy.kind === KIND_DASHER) {
+        // Drifts in, flashes a warning as the lunge winds up, then bursts at the orb.
+        if (enemy.lungeTime > 0) {
+          enemy.lungeTime -= dt;
+          enemy.x += enemy.lungeX * ENEMY.dasher.lungeSpeed * dt;
+          enemy.y += enemy.lungeY * ENEMY.dasher.lungeSpeed * dt;
+        } else {
+          enemy.lungeTimer -= dt;
+          if (enemy.lungeTimer <= 0) {
+            const d = Math.hypot(player.x - enemy.x, player.y - enemy.y) || 1;
+            enemy.lungeX = (player.x - enemy.x) / d;
+            enemy.lungeY = (player.y - enemy.y) / d;
+            enemy.lungeTime = ENEMY.dasher.lungeTime;
+            enemy.lungeTimer = ENEMY.dasher.lungeInterval;
+          } else {
+            if (enemy.lungeTimer < 0.45) enemy.flash = 0.1;
+            seek(enemy, player.x, player.y, enemy.speed, dt);
+          }
         }
       } else {
         seek(enemy, player.x, player.y, enemy.speed, dt);
@@ -269,7 +304,7 @@ export function createWorld(random) {
         const d = Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y);
         if (d < enemy.radius + bullet.radius) {
           bullet.dead = true;
-          enemy.hp -= 1;
+          enemy.hp -= bullet.damage;
           enemy.flash = 0.12;
           state.shotsHit += 1;
           burst(state, bullet.x, bullet.y, '#aef7ff', 4, random, 140);
@@ -322,7 +357,7 @@ export function createWorld(random) {
   function updatePickupsAndShards(dt) {
     let events = 0;
     const player = state.player;
-    const vacuum = player.magnetTimer > 0 ? 280 : PLAYER.vacuum;
+    const vacuum = player.magnetTimer > 0 ? 280 : player.vacuum;
     for (const shard of state.shards) {
       const dx = player.x - shard.x;
       const dy = player.y - shard.y;
@@ -357,7 +392,7 @@ export function createWorld(random) {
       if (d < player.radius + 18) {
         pickup.dead = true;
         if (pickup.kind === PICKUP_HEART) {
-          player.hp = Math.min(PLAYER.maxHp + 2, player.hp + 1);
+          player.hp = Math.min(player.maxHp + 2, player.hp + 1);
           state.floaters.push(createFloater(player.x, player.y - 24, '+1 HP', '#ff5d73'));
         } else if (pickup.kind === PICKUP_SPREAD) {
           player.spreadTimer = PICKUP.spreadTime;
@@ -422,6 +457,8 @@ export function createWorld(random) {
       state.flash = 0;
       state.time = 0;
       state.over = false;
+      state.upgradeOffer = [];
+      state.awaitingUpgrade = false;
     },
     /**
      * Advance the world one fixed step. `input` is { move, aim, firing, dash }.
@@ -474,7 +511,9 @@ export function createWorld(random) {
         state.score += bonus;
         state.floaters.push(createFloater(FIELD.width / 2, FIELD.height / 2 - 120, `WAVE ${state.wave} CLEAR  +${bonus}`, '#ffd94d'));
         if (random.next() < 0.5) state.pickups.push(createPickup(PICKUP_HEART, FIELD.width / 2, FIELD.height / 2));
-        state.betweenWaves = 3;
+        // The next wave waits on the player's pick: three upgrade cards, one choice.
+        state.upgradeOffer = rollUpgrades(random);
+        state.awaitingUpgrade = true;
         events |= EVENT_CLEAR;
       }
       if (state.over) events |= EVENT_OVER;
@@ -483,6 +522,19 @@ export function createWorld(random) {
     /** Begin wave 1 (used by the title demo and the first start). */
     begin() {
       return startWave();
+    },
+    /**
+     * Take one of the offered upgrades (by id) and open the breather before the
+     * next wave. Returns the upgrade taken, or null when nothing was on offer.
+     */
+    applyUpgrade(id) {
+      if (!state.awaitingUpgrade) return null;
+      const def = applyUpgradeTo(state.player, id);
+      if (!def) return null;
+      state.awaitingUpgrade = false;
+      state.upgradeOffer = [];
+      state.betweenWaves = 3;
+      return def;
     },
   };
 
