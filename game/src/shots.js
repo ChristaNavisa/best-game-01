@@ -6,12 +6,15 @@
 // drifts at half speed — so it is caught out once the waves thicken, as a hurried player is.
 
 import { STEP } from './config.js';
+import { KIND_WARDEN } from './entities.js';
 import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE, SCREEN_UPGRADE } from './render.js';
 
 const START_SECONDS = 5;
 const PLAY_SECONDS = 26;
 const END_LIMIT_SECONDS = 600;
 const UPGRADE_LIMIT_SECONDS = 600;
+const BOSS_LIMIT_SECONDS = 300;
+const BOSS_FIGHT_SECONDS = 12;
 
 /** In a staged scene the pilot takes the first card, so the run keeps going. */
 function autoUpgrade(world) {
@@ -86,11 +89,36 @@ export function autopilot(state, skill) {
 }
 
 /**
- * Set `world` to the named scene (start, play, end or upgrade; any other name is
- * start) and return the screen to draw over it and the best score to show.
+ * Set `world` to the named scene (start, play, end, upgrade or boss; any other name
+ * is start) and return the screen to draw over it and the best score to show.
  */
 export function stageShot(name, world) {
   world.reset();
+  if (name === 'boss') {
+    // Play forward until the wave-5 Warden arrives, then fight it a while so the
+    // frame shows the boss, its health bar and the ring of bolts it throws.
+    world.begin();
+    for (let index = 0; index < BOSS_LIMIT_SECONDS / STEP; index += 1) {
+      world.step(STEP, autopilot(world.state, 'full'), false);
+      autoUpgrade(world);
+      if (world.state.over) break;
+      const warden = world.state.enemies.find((e) => e.kind === KIND_WARDEN);
+      if (warden) {
+        // A few seconds into the fight, until the boss is bloodied: the frame then
+        // shows a living boss, a half-spent health bar and the ring of bolts.
+        for (let j = 0; j < BOSS_FIGHT_SECONDS / STEP; j += 1) {
+          world.step(STEP, autopilot(world.state, 'full'), false);
+          if (world.state.over) break;
+          const boss = world.state.enemies.find((e) => e.kind === KIND_WARDEN);
+          if (!boss) break;
+          if (boss.hp < boss.maxHp * 0.6) break;
+        }
+        break;
+      }
+    }
+    const over = world.state.over;
+    return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
+  }
   if (name !== 'play' && name !== 'end' && name !== 'upgrade') {
     world.begin();
     for (let index = 0; index < START_SECONDS / STEP; index += 1) {

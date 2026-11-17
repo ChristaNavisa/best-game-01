@@ -35,11 +35,24 @@ export const ENEMY = {
   brute: { radius: 30, hp: 9, speed: 46, score: 5, shards: 5, touch: 1 },
   /** Drifts in slowly, flashes a warning, then lunges at the orb in a burst. */
   dasher: { radius: 14, hp: 2, speed: 74, score: 3, shards: 2, touch: 1, lungeInterval: 2.4, lungeSpeed: 430, lungeTime: 0.35 },
+  /** The Lantern Warden: a boss that arrives every fifth wave. Slow, huge, and it
+      answers with rings of bolts and fresh wisps while it lumbers after the orb. */
+  warden: { radius: 46, hp: 150, speed: 34, score: 25, shards: 10, touch: 1, burstInterval: 2.8, burstCount: 10, summonInterval: 7 },
 };
 
 /** Wave n (1-based) buys enemies with this many points; costs are ENEMY.*.score. */
 export function waveBudget(wave) {
   return 6 + wave * 4;
+}
+
+/** Waves come in nights of five: night 1 is waves 1–5, night 2 is waves 6–10, and so on. */
+export function nightFor(wave) {
+  return Math.floor((wave - 1) / 5) + 1;
+}
+
+/** Every fifth wave the Lantern Warden arrives instead of a normal wave. */
+export function isBossWave(wave) {
+  return wave % 5 === 0;
 }
 
 export const PICKUP = {
@@ -73,6 +86,8 @@ export const PALETTE = {
   mini: '#b39dff',
   brute: '#5a2ea6',
   dasher: '#ff9d5c',
+  warden: '#ffcf3d',
+  relic: '#ff9de2',
   shard: '#ffc44d',
   heart: '#ff5d73',
   spread: '#7dff9e',

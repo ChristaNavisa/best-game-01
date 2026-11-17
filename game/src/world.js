@@ -2,13 +2,14 @@
 // pickups and the combo multiplier. One fixed step advances everything; the step
 // returns an event bitmask so the main loop can answer each event with sound or text.
 
-import { COMBO, ENEMY, FIELD, PICKUP, PLAYER, SHARD_VALUE, STEP, waveBudget } from './config.js';
+import { COMBO, ENEMY, FIELD, PICKUP, PLAYER, SHARD_VALUE, STEP, isBossWave, nightFor, waveBudget } from './config.js';
 import {
   KIND_BRUTE,
   KIND_DASHER,
   KIND_MINI,
   KIND_SPITTER,
   KIND_SPLITTER,
+  KIND_WARDEN,
   KIND_WISP,
   PICKUP_HEART,
   PICKUP_MAGNET,
@@ -26,6 +27,7 @@ import {
   seek,
 } from './entities.js';
 import { applyUpgradeTo, rollUpgrades } from './upgrades.js';
+import { grantRelic, rollRelic } from './relics.js';
 
 export const EVENT_HIT = 1;
 export const EVENT_OVER = 2;
@@ -110,10 +112,17 @@ export function createWorld(random) {
 
   function startWave() {
     state.wave += 1;
-    state.spawnQueue = buildQueue(random, state.wave);
+    // Every fifth wave the Warden comes alone, with a few wisps trailing in behind it.
+    if (isBossWave(state.wave)) {
+      state.spawnQueue = [KIND_WARDEN, KIND_WISP, KIND_WISP, KIND_WISP, KIND_WISP];
+    } else {
+      state.spawnQueue = buildQueue(random, state.wave);
+    }
     state.spawnTimer = 0.5;
     state.betweenWaves = 0;
     state.waveStartedAt = state.time;
+    // Aegis Flame re-arms its shield at the start of every wave.
+    if (state.player.relics.aegisflame) state.player.shield = true;
     return EVENT_WAVE;
   }
 
@@ -138,6 +147,18 @@ export function createWorld(random) {
       }
     }
     dropPickup(enemy.x, enemy.y);
+    if (enemy.kind === KIND_WARDEN) {
+      // The Warden pays out a relic — or, when every relic is held, a purse of score.
+      const relic = rollRelic(random, state.player.relics);
+      if (relic) {
+        grantRelic(state.player, relic.id);
+        state.floaters.push(createFloater(enemy.x, enemy.y - 40, `RELIC: ${relic.name}`, '#ff9de2'));
+      } else {
+        state.score += 500;
+        state.floaters.push(createFloater(enemy.x, enemy.y - 40, 'RELIC MASTERED  +500', '#ff9de2'));
+      }
+      burst(state, enemy.x, enemy.y, '#ffcf3d', 40, random, 340);
+    }
     // A kill inside the window raises the multiplier; a quiet spell lets it fall.
     if (state.comboTimer > 0) state.combo = Math.min(COMBO.max, state.combo + 1);
     else state.combo = 2;
@@ -234,7 +255,29 @@ export function createWorld(random) {
     for (const enemy of state.enemies) {
       enemy.flash -= dt;
       enemy.wobble += dt * 3;
-      if (enemy.kind === KIND_SPITTER) {
+      if (enemy.kind === KIND_WARDEN) {
+        // Lumbers after the orb; rings of bolts and fresh wisps on their own timers.
+        seek(enemy, player.x, player.y, enemy.speed, dt);
+        enemy.burstTimer -= dt;
+        if (enemy.burstTimer <= 0) {
+          enemy.burstTimer = ENEMY.warden.burstInterval;
+          const offset = random.angle();
+          for (let i = 0; i < ENEMY.warden.burstCount; i += 1) {
+            const a = offset + (i / ENEMY.warden.burstCount) * Math.PI * 2;
+            state.enemyBullets.push(createBullet(enemy.x, enemy.y, a, false));
+          }
+        }
+        enemy.summonTimer -= dt;
+        if (enemy.summonTimer <= 0) {
+          enemy.summonTimer = ENEMY.warden.summonInterval;
+          const adds = state.enemies.filter((e) => e.kind === KIND_WISP).length;
+          if (adds < 6) {
+            for (let i = 0; i < 2; i += 1) {
+              state.enemies.push(createEnemy(KIND_WISP, enemy.x + random.range(-60, 60), enemy.y + random.range(-60, 60), state.wave));
+            }
+          }
+        }
+      } else if (enemy.kind === KIND_SPITTER) {
         const d = Math.hypot(player.x - enemy.x, player.y - enemy.y);
         if (d > ENEMY.spitter.range) seek(enemy, player.x, player.y, enemy.speed, dt);
         else if (d < ENEMY.spitter.range - 60) seek(enemy, enemy.x * 2 - player.x, enemy.y * 2 - player.y, enemy.speed, dt);
@@ -374,7 +417,7 @@ export function createWorld(random) {
       if (d < player.radius + shard.radius + 6) {
         shard.dead = true;
         state.shardsCollected += 1;
-        const gained = SHARD_VALUE * state.combo;
+        const gained = Math.round(SHARD_VALUE * state.combo * player.shardBonus);
         state.score += gained;
         state.floaters.push(createFloater(shard.x, shard.y - 10, `+${gained}`, '#ffc44d'));
         events |= EVENT_SHARD;
@@ -507,7 +550,7 @@ export function createWorld(random) {
         }
         state.player.hp = PLAYER.maxHp;
       } else if (state.wave > 0 && state.betweenWaves <= 0 && !state.over && state.spawnQueue.length === 0 && state.enemies.length === 0) {
-        const bonus = 50 * state.wave;
+        const bonus = 50 * state.wave * nightFor(state.wave);
         state.score += bonus;
         state.floaters.push(createFloater(FIELD.width / 2, FIELD.height / 2 - 120, `WAVE ${state.wave} CLEAR  +${bonus}`, '#ffd94d'));
         if (random.next() < 0.5) state.pickups.push(createPickup(PICKUP_HEART, FIELD.width / 2, FIELD.height / 2));

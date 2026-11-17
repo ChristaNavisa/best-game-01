@@ -35,12 +35,20 @@ quicker dash, a wider ember vacuum or more speed, stacking wave after wave.
 - **Splitter** — breaks into two minis when destroyed.
 - **Dasher** — drifts in, flashes a warning, then lunges at you in a burst.
 - **Brute** — slow, tough, worth the most.
+- **Lantern Warden** — a boss that arrives every 5th wave: a huge lantern that
+  lumbers after you, throws rings of bolts and summons fresh wisps. Slay it and
+  it pays out a **relic** — a permanent keepsake (an extra heart, a lantern
+  core, a prism lens, a swift wick, an aegis flame or a greed wick) that
+  changes the run for good. When every relic is held, the Warden pays 500
+  points instead.
 
 Dropped pickups: **heart** (restore 1 HP, up to 5), **spread shot**
 (three-way fire for 10 s), **shield** (absorbs one hit), **magnet**
 (pulls embers to you for 8 s). You have 3 HP; a hit costs one and grants
-1.2 s of invulnerability. Survive as long as you can — the best score is
-kept in `localStorage`.
+1.2 s of invulnerability. Survive as long as you can. Waves come in nights
+of five — each new night the shadows harden and the wave-clear bonus grows,
+and past wave 10 the drift never ends. The best score is kept in
+`localStorage`.
 
 ## Screenshots
 
@@ -49,8 +57,8 @@ Chromium, taken deterministically with `?seed=1`:
 
 1. `1-start.jpg` — title screen (`?shot=start&seed=1`)
 2. `2-play.jpg` — wave 3 in progress (`?shot=play&seed=1`)
-3. `3-end.jpg` — game over screen, score 5390 at wave 6 (`?shot=end&seed=1`)
-4. `4-upgrade.jpg` — the upgrade choice after clearing wave 1 (`?shot=upgrade&seed=1`)
+3. `3-boss.jpg` — the Lantern Warden fight at wave 5 (`?shot=boss&seed=1`)
+4. `4-end.jpg` — game over screen, score 3490 at wave 5 (`?shot=end&seed=1`)
 
 `?shot=` runs the game headlessly with a built-in autopilot and sets
 `window.__shotReady` when the frame is ready, so the same seed always
@@ -70,6 +78,7 @@ game/
     audio.js      synthesized WebAudio effects
     entities.js   factories for player, enemies, bullets, pickups, shards
     upgrades.js   the between-wave upgrade pool, card layout and applying a pick
+    relics.js     the Warden's relic pool: permanent keepsakes, one per boss
     world.js      the rules: waves, spawning, kills, combo, scoring, pickups
     render.js     all drawing: background, enemies, player, HUD, screens
     shots.js      autopilot + deterministic screenshot scenes

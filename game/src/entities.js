@@ -10,6 +10,7 @@ export const KIND_SPLITTER = 'splitter';
 export const KIND_MINI = 'mini';
 export const KIND_BRUTE = 'brute';
 export const KIND_DASHER = 'dasher';
+export const KIND_WARDEN = 'warden';
 
 export const PICKUP_HEART = 'heart';
 export const PICKUP_SPREAD = 'spread';
@@ -55,12 +56,18 @@ export function createPlayer() {
     dashCooldownMax: PLAYER.dashCooldown,
     maxHp: PLAYER.maxHp,
     upgrades: {},
+    /** Relics the Warden has paid out this run, and the ember-value multiplier they give. */
+    relics: {},
+    shardBonus: 1,
   };
 }
 
 export function createEnemy(kind, x, y, wave) {
   const def = ENEMY[kind];
-  const hpScale = kind === KIND_BRUTE ? 1 + Math.floor(wave / 3) : 1;
+  // Every night past the first hardens every shadow; brutes harden faster still,
+  // and the Warden's own bulk grows with the night it arrives in.
+  const nightScale = 1 + Math.floor((wave - 1) / 5) * 0.5;
+  const hpScale = kind === KIND_BRUTE ? nightScale * (1 + Math.floor(wave / 3)) : nightScale;
   return {
     kind,
     x,
@@ -81,6 +88,9 @@ export function createEnemy(kind, x, y, wave) {
     lungeTime: 0,
     lungeX: 0,
     lungeY: 0,
+    // Warden attack state: a ring of bolts on one timer, fresh wisps on another.
+    burstTimer: def.burstInterval ? def.burstInterval : 0,
+    summonTimer: def.summonInterval ? def.summonInterval : 0,
   };
 }
 

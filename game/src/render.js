@@ -3,10 +3,11 @@
 // colour. Everything is drawn in code — glowing orbs, jagged shadows, particles — so the
 // game ships no image assets at all.
 
-import { FIELD, PALETTE, PLAYER } from './config.js';
-import { KIND_BRUTE, KIND_DASHER, KIND_MINI, KIND_SPITTER, KIND_SPLITTER, KIND_WISP, PICKUP_HEART, PICKUP_MAGNET, PICKUP_SHIELD, PICKUP_SPREAD } from './entities.js';
+import { FIELD, PALETTE, PLAYER, isBossWave, nightFor } from './config.js';
+import { KIND_BRUTE, KIND_DASHER, KIND_MINI, KIND_SPITTER, KIND_SPLITTER, KIND_WARDEN, KIND_WISP, PICKUP_HEART, PICKUP_MAGNET, PICKUP_SHIELD, PICKUP_SPREAD } from './entities.js';
 import { createRandom } from './random.js';
 import { UPGRADE_PANEL, upgradeCardRect } from './upgrades.js';
+import { RELICS } from './relics.js';
 
 export const SCREEN_TITLE = 'title';
 export const SCREEN_PLAY = 'play';
@@ -162,6 +163,7 @@ export function createRenderer(canvas) {
       : enemy.kind === KIND_SPLITTER ? PALETTE.splitter
       : enemy.kind === KIND_MINI ? PALETTE.mini
       : enemy.kind === KIND_DASHER ? PALETTE.dasher
+      : enemy.kind === KIND_WARDEN ? PALETTE.warden
       : PALETTE.brute;
     ctx.shadowColor = color;
     ctx.shadowBlur = 16;
@@ -192,6 +194,29 @@ export function createRenderer(canvas) {
       }
       ctx.closePath();
       ctx.fill();
+    } else if (enemy.kind === KIND_WARDEN) {
+      // A lantern: a spiked cage around a burning core.
+      ctx.beginPath();
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i / 8) * Math.PI * 2 + wobble;
+        const r = enemy.radius * (i % 2 === 0 ? 1 : 0.86);
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#fff3c4';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, enemy.radius * 0.62, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fff3c4';
+      ctx.beginPath();
+      ctx.arc(0, 0, enemy.radius * 0.3 * (1 + 0.12 * Math.sin(time * 6)), 0, Math.PI * 2);
+      ctx.fill();
     } else if (enemy.kind === KIND_BRUTE) {
       ctx.beginPath();
       for (let i = 0; i < 10; i += 1) {
@@ -212,19 +237,20 @@ export function createRenderer(canvas) {
     ctx.shadowBlur = 0;
     // Eyes that track the player.
     ctx.fillStyle = '#ffdf6e';
-    const eyeDx = enemy.kind === KIND_BRUTE ? 9 : 5;
-    const eyeDy = enemy.kind === KIND_BRUTE ? -4 : -3;
-    const eyeR = enemy.kind === KIND_BRUTE ? 4.5 : 3;
+    const eyeDx = enemy.kind === KIND_BRUTE || enemy.kind === KIND_WARDEN ? 9 : 5;
+    const eyeDy = enemy.kind === KIND_BRUTE || enemy.kind === KIND_WARDEN ? -4 : -3;
+    const eyeR = enemy.kind === KIND_BRUTE || enemy.kind === KIND_WARDEN ? 4.5 : 3;
     ctx.beginPath();
     ctx.arc(-eyeDx, eyeDy, eyeR, 0, Math.PI * 2);
     ctx.arc(eyeDx, eyeDy, eyeR, 0, Math.PI * 2);
     ctx.fill();
-    // Brutes show their remaining health.
-    if (enemy.kind === KIND_BRUTE && enemy.hp < enemy.maxHp) {
+    // Brutes and the Warden show their remaining health.
+    if ((enemy.kind === KIND_BRUTE || enemy.kind === KIND_WARDEN) && enemy.hp < enemy.maxHp) {
+      const barW = enemy.kind === KIND_WARDEN ? 110 : 52;
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(-26, -enemy.radius - 14, 52, 6);
+      ctx.fillRect(-barW / 2, -enemy.radius - 14, barW, 6);
       ctx.fillStyle = PALETTE.danger;
-      ctx.fillRect(-26, -enemy.radius - 14, 52 * (enemy.hp / enemy.maxHp), 6);
+      ctx.fillRect(-barW / 2, -enemy.radius - 14, barW * (enemy.hp / enemy.maxHp), 6);
     }
     ctx.restore();
   }
@@ -328,14 +354,29 @@ export function createRenderer(canvas) {
       ctx.font = '700 20px "Trebuchet MS", sans-serif';
       ctx.fillText(`COMBO ×${state.combo}`, FIELD.width / 2, 66);
     }
-    // Wave and best, top right.
+    // Wave and night, top right.
     ctx.textAlign = 'right';
     ctx.font = FONT_HUD;
     ctx.fillStyle = PALETTE.text;
-    ctx.fillText(`WAVE ${Math.max(1, state.wave)}`, FIELD.width - 24, 40);
+    ctx.fillText(`WAVE ${Math.max(1, state.wave)}  •  NIGHT ${nightFor(Math.max(1, state.wave))}`, FIELD.width - 24, 40);
     ctx.font = FONT_SMALL;
     ctx.fillStyle = PALETTE.dim;
     ctx.fillText(`BEST ${Math.max(best, state.score)}`, FIELD.width - 24, 64);
+    // The Warden's health, front and centre while it lives.
+    const warden = state.enemies.find((e) => e.kind === KIND_WARDEN);
+    if (warden) {
+      ctx.textAlign = 'center';
+      ctx.font = '700 20px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = PALETTE.warden;
+      ctx.fillText('⚠  LANTERN WARDEN  ⚠', FIELD.width / 2, 92);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(FIELD.width / 2 - 190, 100, 380, 10);
+      ctx.fillStyle = PALETTE.danger;
+      ctx.fillRect(FIELD.width / 2 - 190, 100, 380 * (warden.hp / warden.maxHp), 10);
+      ctx.strokeStyle = PALETTE.warden;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(FIELD.width / 2 - 190, 100, 380, 10);
+    }
     // Dash cooldown, bottom left.
     const dashReady = player.dashCooldown <= 0;
     ctx.textAlign = 'left';
@@ -364,13 +405,22 @@ export function createRenderer(canvas) {
       ctx.fillStyle = PALETTE.dim;
       ctx.fillText('MUTED [M]', FIELD.width - 24, FIELD.height - 22);
     }
-    // The run's build so far, bottom right: what the player chose between waves.
+    // The run's build so far, bottom right: what the player chose between waves,
+    // and the relics the Warden paid out.
     const build = Object.entries(player.upgrades).map(([id, count]) => `${id.toUpperCase()}${count > 1 ? ` ×${count}` : ''}`);
-    if (build.length > 0) {
+    const relics = Object.keys(player.relics).map((id) => {
+      const def = RELICS.find((r) => r.id === id);
+      return def ? `✦ ${def.name}` : '';
+    }).filter(Boolean);
+    if (build.length > 0 || relics.length > 0) {
       ctx.textAlign = 'right';
       ctx.font = FONT_SMALL;
       ctx.fillStyle = PALETTE.dim;
       ctx.fillText(build.join('   •   '), FIELD.width - 24, FIELD.height - 46);
+      if (relics.length > 0) {
+        ctx.fillStyle = PALETTE.relic;
+        ctx.fillText(relics.join('   •   '), FIELD.width - 24, FIELD.height - 66);
+      }
     }
     // Wave banners.
     if (state.betweenWaves > 0) {
@@ -384,9 +434,22 @@ export function createRenderer(canvas) {
     } else if (state.time - state.waveStartedAt < 2 && state.wave > 0) {
       ctx.textAlign = 'center';
       ctx.font = FONT_BANNER;
-      ctx.fillStyle = PALETTE.banner;
       ctx.globalAlpha = Math.min(1, 2 - (state.time - state.waveStartedAt));
-      ctx.fillText(`WAVE ${state.wave}`, FIELD.width / 2, 130);
+      if (isBossWave(state.wave)) {
+        ctx.fillStyle = PALETTE.danger;
+        ctx.fillText('⚠  LANTERN WARDEN  ⚠', FIELD.width / 2, 130);
+        ctx.font = FONT_BODY;
+        ctx.fillStyle = PALETTE.text;
+        ctx.fillText(`WAVE ${state.wave} — slay it to claim a relic`, FIELD.width / 2, 168);
+      } else {
+        ctx.fillStyle = PALETTE.banner;
+        ctx.fillText(`WAVE ${state.wave}`, FIELD.width / 2, 130);
+        if (state.wave > 1 && nightFor(state.wave) > nightFor(state.wave - 1)) {
+          ctx.font = FONT_BODY;
+          ctx.fillStyle = PALETTE.text;
+          ctx.fillText(`NIGHT ${nightFor(state.wave)} — the dark deepens`, FIELD.width / 2, 168);
+        }
+      }
       ctx.globalAlpha = 1;
     }
   }
@@ -412,7 +475,10 @@ export function createRenderer(canvas) {
     ctx.fillText('Blast the shadows. Gather their embers. Chain kills to raise your combo.', FIELD.width / 2, 410);
     ctx.fillText('Grab hearts, spread shot, shields and magnets. Survive the waves.', FIELD.width / 2, 440);
     ctx.fillStyle = PALETTE.banner;
-    ctx.fillText('Clear a wave to choose an upgrade — build your orb, your way.', FIELD.width / 2, 470);
+    ctx.fillText('Every 5th wave the Lantern Warden comes — slay it, claim a relic.', FIELD.width / 2, 470);
+    ctx.fillStyle = PALETTE.dim;
+    ctx.font = FONT_BODY;
+    ctx.fillText('Past wave 10 the drift never ends — nights deepen, shadows harden.', FIELD.width / 2, 530);
     if (best > 0) {
       ctx.fillStyle = PALETTE.banner;
       ctx.font = FONT_PANEL;
@@ -486,6 +552,11 @@ export function createRenderer(canvas) {
     ctx.fillStyle = PALETTE.dim;
     ctx.fillText(`Best ${best}      Wave ${state.wave}      Kills ${state.kills}`, FIELD.width / 2, 310);
     ctx.fillText(`Accuracy ${accuracy}%      Embers gathered ${state.shardsCollected}`, FIELD.width / 2, 342);
+    const relicNames = Object.keys(state.player.relics).map((id) => {
+      const def = RELICS.find((r) => r.id === id);
+      return def ? def.name : id.toUpperCase();
+    });
+    ctx.fillText(`Night ${nightFor(Math.max(1, state.wave))} reached      Relics: ${relicNames.length > 0 ? relicNames.join(', ') : 'none'}`, FIELD.width / 2, 374);
     ctx.fillStyle = PALETTE.player;
     ctx.font = '700 24px "Trebuchet MS", sans-serif';
     ctx.fillText('Press R or click to drift again', FIELD.width / 2, 420);
